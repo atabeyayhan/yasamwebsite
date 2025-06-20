@@ -21,20 +21,27 @@ admin.initializeApp();
 
 export const addAdminRole = functions.https.onCall(
   async (data: any, context: any) => {
-    if (!context.auth || context.auth.token.admin !== true) {
+    // Checking that the user is an admin.
+    if (context.auth?.token.admin !== true) {
+      // Throwing an HttpsError so that the client gets the error details.
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only admins can add other admins."
+        "The function must be called by an admin."
       );
     }
-    const email = typeof data.email === "string" ? data.email : "";
+
+    const email: string = data.email;
     if (!email) {
-      throw new functions.https.HttpsError("invalid-argument", "Email required.");
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Email required."
+      );
     }
+
     try {
       const user = await admin.auth().getUserByEmail(email);
-      await admin.auth().setCustomUserClaims(user.uid, { admin: true });
-      return { message: `Success! ${email} is now an admin.` };
+      await admin.auth().setCustomUserClaims(user.uid, {admin: true});
+      return {message: `Success! ${email} is now an admin.`};
     } catch (error) {
       throw new functions.https.HttpsError("not-found", "User not found.");
     }

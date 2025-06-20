@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, orderBy, getDocs, updateDoc } from "firebase/firestore";
 
 // Types
 interface Product {
@@ -14,6 +14,36 @@ interface Product {
 
 interface CartItem extends Product {
     quantity: number;
+}
+
+interface OrderItem {
+    productId: string;
+    name: string;
+    price: number;
+    quantity: number;
+    image: string;
+}
+
+interface Order {
+    id: string;
+    userId: string;
+    userEmail: string;
+    userName: string;
+    items: OrderItem[];
+    total: number;
+    status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+    shippingAddress: {
+        name: string;
+        phone: string;
+        address: string;
+        city: string;
+        postalCode?: string;
+        additionalInfo?: string;
+    };
+    paymentStatus: 'pending' | 'paid' | 'failed';
+    paymentMethod: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 interface User {
@@ -418,56 +448,284 @@ function updateQuantity(productId: string, newQuantity: number) {
 // Proceed to Checkout
 function proceedToCheckout() {
     if (!currentUser) {
-        showNotification('Lütfen ödeme yapmak için giriş yapın');
+        showNotification("Lütfen ödeme yapmak için giriş yapın");
         return;
     }
-    renderPaymentForm();
+    
+    if (cart.length === 0) {
+        showNotification("Sepetinizde ürün bulunmamaktadır");
+        return;
+    }
+    
+    // Check if user has complete profile information
+    checkUserProfileAndProceed();
 }
 
-// Render Payment Form
-function renderPaymentForm() {
-    if (!mainContent) return;
+async function checkUserProfileAndProceed() {
+    if (!currentUser) return;
+    
+    try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.id));
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        
+        // Check if required fields are filled
+        const requiredFields = ['name', 'phone', 'address', 'city'];
+        const missingFields = requiredFields.filter(field => !userData[field]);
+        
+        if (missingFields.length > 0) {
+            showNotification("Lütfen önce profil bilgilerinizi tamamlayın");
+            showProfile();
+            return;
+        }
+        
+        // Proceed to checkout with user data
+        renderCheckoutForm(userData);
+        
+    } catch (error) {
+        showNotification("Profil bilgileri kontrol edilemedi");
+        console.error('Profile check error:', error);
+    }
+}
 
+function renderCheckoutForm(userData: any) {
+    if (!mainContent) return;
+    
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const orderItems = cart.map(item => ({
+        productId: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image
+    }));
     
     mainContent.innerHTML = `
-        <div class="payment-form">
-            <h2>Ödeme Bilgileri</h2>
-            <form id="payment-form" onsubmit="handlePayment(event)">
-                <div class="form-group">
-                    <label for="card-number">Kart Numarası</label>
-                    <input type="text" id="card-number" placeholder="1234 5678 9012 3456" required>
+        <div class="checkout-container">
+            <h2>Sipariş Onayı</h2>
+            
+            <div class="checkout-sections">
+                <div class="shipping-info">
+                    <h3>Teslimat Bilgileri</h3>
+                    <div class="info-card">
+                        <p><strong>Ad Soyad:</strong> ${userData.name}</p>
+                        <p><strong>Telefon:</strong> ${userData.phone}</p>
+                        <p><strong>Adres:</strong> ${userData.address}</p>
+                        <p><strong>Şehir:</strong> ${userData.city}</p>
+                        ${userData.postalCode ? `<p><strong>Posta Kodu:</strong> ${userData.postalCode}</p>` : ''}
+                        ${userData.additionalInfo ? `<p><strong>Ek Bilgiler:</strong> ${userData.additionalInfo}</p>` : ''}
+                    </div>
+                    <button onclick="showProfile()" class="btn btn-secondary">Bilgileri Düzenle</button>
                 </div>
-                <div class="form-group">
-                    <label for="expiry">Son Kullanma Tarihi</label>
-                    <input type="text" id="expiry" placeholder="AA/YY" required>
-                </div>
-                <div class="form-group">
-                    <label for="cvv">CVV</label>
-                    <input type="text" id="cvv" placeholder="123" required>
-                </div>
-                <div class="form-group">
-                    <label for="name">Kart Üzerindeki İsim</label>
-                    <input type="text" id="name" placeholder="Ad Soyad" required>
-                </div>
+                
                 <div class="order-summary">
                     <h3>Sipariş Özeti</h3>
-                    <p>Toplam Tutar: ${total.toFixed(2)} TL</p>
+                    <div class="order-items">
+                        ${orderItems.map(item => `
+                            <div class="order-item">
+                                <img src="${item.image}" alt="${item.name}">
+                                <div class="item-details">
+                                    <h4>${item.name}</h4>
+                                    <p>${item.price.toFixed(2)} TL x ${item.quantity}</p>
+                                </div>
+                                <div class="item-total">
+                                    ${(item.price * item.quantity).toFixed(2)} TL
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="order-total">
+                        <h4>Toplam: ${total.toFixed(2)} TL</h4>
+                    </div>
                 </div>
-                <button type="submit">Ödemeyi Tamamla</button>
-            </form>
+            </div>
+            
+            <div class="payment-section">
+                <h3>Ödeme Yöntemi</h3>
+                <div class="payment-methods">
+                    <label class="payment-method">
+                        <input type="radio" name="payment" value="iyzico" checked>
+                        <span>Kredi/Banka Kartı (Iyzico)</span>
+                    </label>
+                </div>
+                
+                <button onclick="processOrder()" class="btn btn-primary checkout-btn">
+                    Siparişi Onayla ve Ödeme Yap
+                </button>
+            </div>
         </div>
     `;
 }
 
-// Handle Payment
-function handlePayment(event: Event) {
-    event.preventDefault();
-    // This is a dummy payment handler
-    showNotification('Ödeme başarılı! Alışverişiniz için teşekkür ederiz.');
-    cart = [];
-    updateCartCount();
-    renderProducts();
+async function processOrder() {
+    if (!currentUser || cart.length === 0) return;
+    
+    try {
+        // Get user data
+        const userDoc = await getDoc(doc(db, "users", currentUser.id));
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        
+        const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const orderItems = cart.map(item => ({
+            productId: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image
+        }));
+        
+        // Create order object
+        const order: Omit<Order, 'id'> = {
+            userId: currentUser.id,
+            userEmail: currentUser.email,
+            userName: userData.name || currentUser.name,
+            items: orderItems,
+            total: total,
+            status: 'pending',
+            shippingAddress: {
+                name: userData.name || currentUser.name,
+                phone: userData.phone,
+                address: userData.address,
+                city: userData.city,
+                postalCode: userData.postalCode,
+                additionalInfo: userData.additionalInfo
+            },
+            paymentStatus: 'pending',
+            paymentMethod: 'iyzico',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        // Save order to Firestore
+        const orderRef = await addDoc(collection(db, "orders"), order);
+        
+        showNotification("Sipariş kaydedildi! Ödeme sayfasına yönlendiriliyorsunuz...");
+        
+        // Here you would integrate with Iyzico
+        // For now, we'll simulate the payment process
+        await simulatePayment(orderRef.id);
+        
+    } catch (error) {
+        showNotification("Sipariş kaydedilemedi!");
+        console.error('Order processing error:', error);
+    }
+}
+
+async function simulatePayment(orderId: string) {
+    // Simulate payment processing
+    setTimeout(async () => {
+        try {
+            // Update order status to paid
+            await updateDoc(doc(db, "orders", orderId), {
+                paymentStatus: 'paid',
+                status: 'confirmed',
+                updatedAt: new Date().toISOString()
+            });
+            
+            // Clear cart
+            cart = [];
+            updateCartCount();
+            
+            showNotification("Ödeme başarılı! Siparişiniz onaylandı.");
+            
+            // Redirect to order confirmation
+            renderOrderConfirmation(orderId);
+            
+        } catch (error) {
+            showNotification("Ödeme işlemi tamamlanamadı!");
+            console.error('Payment simulation error:', error);
+        }
+    }, 2000);
+}
+
+function renderOrderConfirmation(orderId: string) {
+    if (!mainContent) return;
+    
+    mainContent.innerHTML = `
+        <div class="order-confirmation">
+            <div class="success-icon">✓</div>
+            <h2>Siparişiniz Alındı!</h2>
+            <p>Sipariş numaranız: <strong>${orderId}</strong></p>
+            <p>Siparişiniz başarıyla oluşturuldu ve ödemeniz alındı.</p>
+            <p>Kargo bilgileri email adresinize gönderilecektir.</p>
+            
+            <div class="confirmation-actions">
+                <button onclick="renderProducts()" class="btn btn-primary">Alışverişe Devam Et</button>
+                <button onclick="showOrderHistory()" class="btn btn-secondary">Siparişlerimi Görüntüle</button>
+            </div>
+        </div>
+    `;
+}
+
+async function showOrderHistory() {
+    if (!currentUser) return;
+    
+    try {
+        const ordersQuery = query(
+            collection(db, "orders"),
+            where("userId", "==", currentUser.id),
+            orderBy("createdAt", "desc")
+        );
+        
+        const querySnapshot = await getDocs(ordersQuery);
+        const orders: Order[] = [];
+        
+        querySnapshot.forEach((doc) => {
+            orders.push({ id: doc.id, ...doc.data() } as Order);
+        });
+        
+        renderOrderHistory(orders);
+        
+    } catch (error) {
+        showNotification("Sipariş geçmişi yüklenemedi!");
+        console.error('Order history error:', error);
+    }
+}
+
+function renderOrderHistory(orders: Order[]) {
+    if (!mainContent) return;
+    
+    mainContent.innerHTML = `
+        <div class="order-history">
+            <h2>Sipariş Geçmişim</h2>
+            ${orders.length === 0 ? 
+                '<p class="no-orders">Henüz siparişiniz bulunmamaktadır.</p>' :
+                orders.map(order => `
+                    <div class="order-card">
+                        <div class="order-header">
+                            <h3>Sipariş #${order.id.slice(-8)}</h3>
+                            <span class="order-status ${order.status}">${getStatusText(order.status)}</span>
+                        </div>
+                        <div class="order-items">
+                            ${order.items.map(item => `
+                                <div class="order-item">
+                                    <img src="${item.image}" alt="${item.name}">
+                                    <div class="item-details">
+                                        <h4>${item.name}</h4>
+                                        <p>${item.price.toFixed(2)} TL x ${item.quantity}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="order-footer">
+                            <p><strong>Toplam:</strong> ${order.total.toFixed(2)} TL</p>
+                            <p><strong>Tarih:</strong> ${new Date(order.createdAt).toLocaleDateString('tr-TR')}</p>
+                        </div>
+                    </div>
+                `).join('')
+            }
+        </div>
+    `;
+}
+
+function getStatusText(status: string): string {
+    const statusMap: { [key: string]: string } = {
+        'pending': 'Beklemede',
+        'confirmed': 'Onaylandı',
+        'shipped': 'Kargoda',
+        'delivered': 'Teslim Edildi',
+        'cancelled': 'İptal Edildi'
+    };
+    return statusMap[status] || status;
 }
 
 // SPA: Show profile view in main-content with #profile-area before calling loadUserProfile
@@ -541,6 +799,10 @@ function renderProfileForm(profileData: any = {}, editMode: boolean = false, con
     const displayName = profileData.name || currentUser?.name || '';
     const address = profileData.address || '';
     const phone = profileData.phone || '';
+    const city = profileData.city || '';
+    const postalCode = profileData.postalCode || '';
+    const additionalInfo = profileData.additionalInfo || '';
+    
     container.innerHTML = `
         <div class="profile-form-container">
             <h2>Profil Bilgileri</h2>
@@ -554,24 +816,40 @@ function renderProfileForm(profileData: any = {}, editMode: boolean = false, con
             <form id="profile-form">
                 ${editMode ? `
                 <div class="form-group">
-                    <label for="name">Ad Soyad</label>
+                    <label for="name">Ad Soyad *</label>
                     <input type="text" id="name" value="${displayName}" required>
                 </div>
                 <div class="form-group">
-                    <label for="address">Adres</label>
-                    <input type="text" id="address" value="${address}" required>
+                    <label for="phone">Telefon *</label>
+                    <input type="tel" id="phone" value="${phone}" placeholder="05XX XXX XX XX" required>
                 </div>
                 <div class="form-group">
-                    <label for="phone">Telefon</label>
-                    <input type="text" id="phone" value="${phone}" required>
+                    <label for="address">Adres *</label>
+                    <textarea id="address" rows="3" required>${address}</textarea>
                 </div>
-                <button type="submit">Kaydet</button>
+                <div class="form-group">
+                    <label for="city">Şehir *</label>
+                    <input type="text" id="city" value="${city}" required>
+                </div>
+                <div class="form-group">
+                    <label for="postalCode">Posta Kodu</label>
+                    <input type="text" id="postalCode" value="${postalCode}" placeholder="34000">
+                </div>
+                <div class="form-group">
+                    <label for="additionalInfo">Ek Bilgiler</label>
+                    <textarea id="additionalInfo" rows="2" placeholder="Apartman, kat, kapı no vb.">${additionalInfo}</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Kaydet</button>
+                <button type="button" class="btn btn-secondary" onclick="renderProfileForm(${JSON.stringify(profileData)}, false, container)">İptal</button>
                 ` : `
-                <div class="profile-view-field"><strong>Adres:</strong> ${address}</div>
-                <div class="profile-view-field"><strong>Telefon:</strong> ${phone}</div>
+                <div class="profile-view-field"><strong>Telefon:</strong> ${phone || 'Belirtilmemiş'}</div>
+                <div class="profile-view-field"><strong>Adres:</strong> ${address || 'Belirtilmemiş'}</div>
+                <div class="profile-view-field"><strong>Şehir:</strong> ${city || 'Belirtilmemiş'}</div>
+                ${postalCode ? `<div class="profile-view-field"><strong>Posta Kodu:</strong> ${postalCode}</div>` : ''}
+                ${additionalInfo ? `<div class="profile-view-field"><strong>Ek Bilgiler:</strong> ${additionalInfo}</div>` : ''}
                 `}
             </form>
-            ${!editMode ? '<button id="edit-profile-btn" class="profile-btn">Düzenle</button>' : ''}
+            ${!editMode ? '<button id="edit-profile-btn" class="profile-btn btn btn-primary">Düzenle</button>' : ''}
         </div>
     `;
     showNotification('Profil formu başarıyla render edildi!');
@@ -584,7 +862,7 @@ function renderProfileForm(profileData: any = {}, editMode: boolean = false, con
     const editBtn = document.getElementById('edit-profile-btn');
     if (editBtn) {
         editBtn.addEventListener('click', () => {
-            renderProfileForm({ name: displayName, address, phone }, true, container);
+            renderProfileForm({ name: displayName, address, phone, city, postalCode, additionalInfo }, true, container);
         });
     }
 }
@@ -592,10 +870,24 @@ function renderProfileForm(profileData: any = {}, editMode: boolean = false, con
 async function handleProfileSave(event: Event) {
     event.preventDefault();
     if (!currentUser) return;
+    
     const name = (document.getElementById('name') as HTMLInputElement).value;
-    const address = (document.getElementById('address') as HTMLInputElement).value;
     const phone = (document.getElementById('phone') as HTMLInputElement).value;
-    const userProfile = { name, address, phone };
+    const address = (document.getElementById('address') as HTMLTextAreaElement).value;
+    const city = (document.getElementById('city') as HTMLInputElement).value;
+    const postalCode = (document.getElementById('postalCode') as HTMLInputElement).value;
+    const additionalInfo = (document.getElementById('additionalInfo') as HTMLTextAreaElement).value;
+    
+    const userProfile = { 
+        name, 
+        phone, 
+        address, 
+        city, 
+        postalCode, 
+        additionalInfo,
+        updatedAt: new Date().toISOString()
+    };
+    
     try {
         await setDoc(doc(db, "users", currentUser.id), userProfile);
         currentUser.name = name;
@@ -605,6 +897,7 @@ async function handleProfileSave(event: Event) {
         renderProfileForm(userProfile, false);
     } catch (error) {
         showNotification("Profil kaydedilemedi!");
+        console.error('Profile save error:', error);
     }
 }
 
@@ -921,7 +1214,8 @@ document.addEventListener('DOMContentLoaded', () => {
 (window as any).addToCart = addToCart;
 (window as any).updateQuantity = updateQuantity;
 (window as any).proceedToCheckout = proceedToCheckout;
-(window as any).handlePayment = handlePayment;
+(window as any).processOrder = processOrder;
+(window as any).showOrderHistory = showOrderHistory;
 (window as any).signInWithGoogle = signInWithGoogle;
 (window as any).logout = logout;
 (window as any).loadUserProfile = loadUserProfile;

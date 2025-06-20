@@ -1,58 +1,144 @@
-<!DOCTYPE html><html lang=tr><meta charset=UTF-8><meta name=viewport content="width=device-width, initial-scale=1.0"><title>Premium Musluklar - Güvenilir Musluk Mağazanız</title><link rel=stylesheet href=/faucet-store.109e5ec4.css><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&amp;display=swap" rel=stylesheet><script src=https://accounts.google.com/gsi/client async defer></script><body>
+<!DOCTYPE html><html lang=tr><meta charset=UTF-8><meta name=viewport content="width=device-width, initial-scale=1.0"><title>Premium Musluklar - Güvenilir Musluk Mağazanız</title><link rel=stylesheet href=/faucet-store.b14cd4b0.css><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&amp;display=swap" rel=stylesheet><script src=https://accounts.google.com/gsi/client async defer></script><body>
     <header class=header>
         <nav class=nav-container>
             <div class=nav-links>
                 <div class=dropdown>
                     <a href=/products class=nav-link>Ürünler ▼</a>
                     <div class=dropdown-content>
-                        <a href=/products/kitchen>Mutfak Muslukları</a>
-                        <a href=/products/bathroom>Banyo Muslukları</a>
-                        <a href=/products/shower>Duş Sistemleri</a>
-                        <a href=/products/accessories>Aksesuarlar</a>
+                        <a href=/products/kitchen>Evye Bataryası</a>
+                        <a href=/products/bathroom>Banyo Bataryası</a>
+                        <a href=/products/lavabo>Lavabo Bataryası</a>
+                        <a href=/products/shower>Duş Sistemi</a>
+                        <a href=/products/accessories>Musluk Başlığı</a>
                     </div>
                 </div>
                 <a href=/about class=nav-link>Hakkımızda</a>
                 <a href=/contact class=nav-link>İletişim</a>
             </div>
             <div class=logo>
-                <img src="logo.png" class="site-logo" alt="Logo">
-                <button id="cart-icon">
-                    <span class="material-icons">shopping_cart</span>
-                    <span id="cart-count">0</span>
-                </button>
+                <a href=/ style=display:inline-block;line-height:1;>
+                    <h1 style=margin:0>funzav</h1>
+                </a>
             </div>
             <div class=nav-actions>
-                <div id=user-profile class=user-profile>
-                    <button id=login-button onclick=signInWithGoogle()>Google ile Giriş Yap</button>
-                    <div id=user-info class="hidden user-info"></div>
-                </div>
+                <button id=login-button class=google-signin-btn onclick=signInWithGoogle()>
+                    <img src=https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg class=google-icon alt=Google>
+                    Giriş Yap
+                </button>
+                <div id=cart-icon class=cart-icon>🛒 <span id=cart-count>0</span></div>
+                <div id=user-info class="hidden user-info"></div>
             </div>
         </nav>
     </header>
 
-    <div class=hero-section>
-        <div class=hero-content>
-            <h1>Premium Musluklar</h1>
-            <p>Kalite ve Şıklığın Buluştuğu Nokta</p>
-            <a href=/products class=cta-button>Ürünleri Keşfet</a>
-        </div>
-    </div>
+    
+    <nav class=breadcrumb id=breadcrumb>
+        <a href=#>Ana Sayfa</a>
+    </nav>
+    <div id=main-content style=display:none></div>
 
-    <main id=main-content>
-        
-    </main>
+    
+    <section class=hero-section>
+        <div class="active hero-carousel">
+            <div class=carousel-container>
+                <div class="active carousel-slide" style="background-image:linear-gradient(#0006,#0006),url(https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=1200&amp;q=80)">
+                    <div class=slide-content>
+                        <h1>Premium Mutfak Bataryaları</h1>
+                        <p>Modern mutfağınız için şık ve fonksiyonel çözümler</p>
+                        <a href=#products-section class=cta-button>Ürünleri Keşfet</a>
+                    </div>
+                </div>
+                <div class=carousel-slide style="background-image:linear-gradient(#0006,#0006),url(https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=1200&amp;q=80)">
+                    <div class=slide-content>
+                        <h1>Lüks Banyo Bataryaları</h1>
+                        <p>Banyo deneyiminizi yeniden tanımlayın</p>
+                        <a href=#products-section class=cta-button>Ürünleri Keşfet</a>
+                    </div>
+                </div>
+                <div class=carousel-slide style="background-image:linear-gradient(#0006,#0006),url(https://images.unsplash.com/photo-1584622650111-993a426fbf0a?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=1200&amp;q=80)">
+                    <div class=slide-content>
+                        <h1>Duş Sistemleri</h1>
+                        <p>Günlük rutininizi lüks bir deneyime dönüştürün</p>
+                        <a href=#products-section class=cta-button>Ürünleri Keşfet</a>
+                    </div>
+                </div>
+            </div>
+            <button class="carousel-btn prev" onclick=changeSlide(-1)>❮</button>
+            <button class="carousel-btn next" onclick=changeSlide(1)>❯</button>
+            <div class=carousel-dots>
+                <span class="active dot" onclick=currentSlide(1)></span>
+                <span class=dot onclick=currentSlide(2)></span>
+                <span class=dot onclick=currentSlide(3)></span>
+            </div>
+        </div>
+    </section>
+
+    
+    <section id=about-section class="about-section layered-section">
+        <div class=about-content>
+            <div class=about-text>
+                <h2>Hakkımızda</h2>
+                <p>funzav, 2021 yılından beri mutfak ve banyo bataryaları alanında kaliteli ürünler sunan bir şirkettir. Müşteri memnuniyetini ön planda tutarak, yenilikçi ve dayanıklı ürünler geliştirmeye devam ediyoruz.</p>
+            </div>
+            <div class=about-image>
+                <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt=Hakkımızda>
+            </div>
+        </div>
+    </section>
+
+    
+    <section id=products-section class="layered-section products-preview-section">
+        <h2>Öne Çıkan Ürünler</h2>
+        <div class=products-preview-grid>
+            <div class=product-card>
+                <div class=product-image style="background-image:url(https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=400&amp;q=80)"></div>
+                <div class=product-details>
+                    <h3>Modern Mutfak Bataryası</h3>
+                    <p>Tek kollu, çekmeli mutfak bataryası</p>
+                    <span class=price>₺1,299</span>
+                    <button class=add-to-cart-btn>Sepete Ekle</button>
+                </div>
+            </div>
+            <div class=product-card>
+                <div class=product-image style="background-image:url(https://images.unsplash.com/photo-1584622650111-993a426fbf0a?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=400&amp;q=80)"></div>
+                <div class=product-details>
+                    <h3>Profesyonel Mutfak Bataryası</h3>
+                    <p>Profesyonel stil, yüksek çıkışlı</p>
+                    <span class=price>₺1,599</span>
+                    <button class=add-to-cart-btn>Sepete Ekle</button>
+                </div>
+            </div>
+            <div class=product-card>
+                <div class=product-image style="background-image:url(https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?ixlib=rb-4.0.3&amp;auto=format&amp;fit=crop&amp;w=400&amp;q=80)"></div>
+                <div class=product-details>
+                    <h3>Lüks Banyo Bataryası</h3>
+                    <p>Termostatik duş bataryası</p>
+                    <span class=price>₺2,499</span>
+                    <button class=add-to-cart-btn>Sepete Ekle</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    
+    <section id=contact-section class="contact-section layered-section">
+        <div class=contact-content>
+            <div class=contact-text>
+                <h2>İletişim</h2>
+                <p>Bize ulaşmak için aşağıdaki bilgileri kullanabilirsiniz:</p>
+                <ul>
+                    <li>E-posta: info@premiummusluklar.com</li>
+                    <li>Telefon: (555) 123-4567</li>
+                </ul>
+            </div>
+            <div class=contact-image>
+                <img src="https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt=İletişim>
+            </div>
+        </div>
+    </section>
 
     <footer class=footer>
         <div class=footer-content>
-            <div class=footer-section>
-                <h3>Hakkımızda</h3>
-                <p>Premium musluk ve banyo ekipmanları için güvenilir adresiniz.</p>
-            </div>
-            <div class=footer-section>
-                <h3>İletişim</h3>
-                <p>E-posta: info@premiummusluklar.com</p>
-                <p>Telefon: (555) 123-4567</p>
-            </div>
             <div class=footer-section>
                 <h3>Bizi Takip Edin</h3>
                 <div class=social-links>
@@ -61,36 +147,17 @@
                     <a href=# class=social-link>Twitter</a>
                 </div>
             </div>
+            <div class=footer-section>
+                <h3>Adres</h3>
+                <p>Örnek Mahallesi, Batarya Sokak No:12<br>34704 Kadıköy/İstanbul<br>Türkiye</p>
+                <a href=/products class=nav-link>Ürünler</a>
+            </div>
         </div>
         <div class=footer-bottom>
             <p>© 2024 Premium Musluklar. Tüm hakları saklıdır.</p>
         </div>
     </footer>
 
-    <script type=module src=/faucet-store.3d3b06d6.js></script>
-
-    <style>
-        .google-signin-btn {
-            display: flex;
-            align-items: center;
-            background: #fff;
-            color: #444;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: box-shadow 0.2s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .google-signin-btn:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.10);
-        }
-        .google-icon {
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-        }
-    </style>
+    <script type=module src=/faucet-store.52912516.js></script>
 
  
