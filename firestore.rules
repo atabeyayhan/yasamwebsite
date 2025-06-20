@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──── PRODUCTS ──────────────────────────────────────
+    match /products/{productId} {
+      allow read: if true;                                // public catalog
+      allow create, update, delete:
+        if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // ──── USERS ─────────────────────────────────────────
+    match /users/{userId} {
+      // A user may read/write their own profile doc
+      allow read, update:
+        if request.auth != null && request.auth.uid == userId;
+      // Only admins may delete arbitrary users
+      allow delete:
+        if request.auth != null && request.auth.token.admin == true;
+      // Creating a user document on signup
+      allow create:
+        if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ──── CARTS ─────────────────────────────────────────
+    match /carts/{cartId} {
+      allow read, write:
+        if request.auth != null && request.auth.uid == cartId;
+    }
+
+    // ──── ORDERS ────────────────────────────────────────
+    match /orders/{orderId} {
+      // Creating an order: must be signed in and userRef must match their uid
+      allow create:
+        if request.auth != null
+        && request.resource.data.userRef == ('users/' + request.auth.uid);
+
+      // Reading: users can read their own orders; admins can read all
+      allow read:
+        if request.auth != null
+        && (resource.data.userRef == ('users/' + request.auth.uid)
+            || request.auth.token.admin == true);
+
+      // Updating (e.g. changing status): only admins
+      allow update:
+        if request.auth != null && request.auth.token.admin == true;
+
+      // Deleting: only admins (if ever needed)
+      allow delete:
+        if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Fallback rule: deny all other access.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 
