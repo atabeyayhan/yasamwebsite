@@ -1,7 +1,6 @@
 const admin = require("firebase-admin");
 
 // The service account key is loaded from the GOOGLE_APPLICATION_CREDENTIALS environment variable
-// const serviceAccount = require("./yasam-website-firebase-adminsdk-fbsvc-92d681f95f.json");
 
 admin.initializeApp({
   credential: admin.credential.applicationDefault(),
