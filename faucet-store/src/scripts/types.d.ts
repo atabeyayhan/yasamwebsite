@@ -24,4 +24,17 @@ declare function jwt_decode(token: string): {
     name: string;
     picture?: string;
     [key: string]: any;
-}; 
+};
+
+// Global functions for admin functionality
+declare global {
+    interface Window {
+        addToCartById: (productId: string) => void;
+        showProductDetail: (productId: string) => void;
+        openAdminPanel: () => void;
+        saveProduct: (productData: any) => void;
+        deleteProduct: (productId: string) => void;
+        editProduct: (productId: string) => void;
+        closeModal: () => void;
+    }
+} 

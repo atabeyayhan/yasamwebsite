@@ -1,6 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, orderBy, getDocs, updateDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, addDoc, collection, query, where, orderBy, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Types
 interface Product {
@@ -10,6 +12,18 @@ interface Product {
     image: string;
     description: string;
     category: string;
+    detailedDescription?: string;
+    specifications?: {
+        material?: string;
+        finish?: string;
+        dimensions?: string;
+        warranty?: string;
+        features?: string[];
+    };
+    stock?: number;
+    isActive?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 interface CartItem extends Product {
@@ -56,113 +70,8 @@ interface User {
 // State
 let currentUser: User | null = null;
 let cart: CartItem[] = [];
-
-// Sample Products Data
-const products: Product[] = [
-    // Mutfak Muslukları
-    {
-        id: 'k1',
-        name: 'Modern Mutfak Musluğu',
-        price: 199.99,
-        image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Çağdaş tek kollu mutfak musluğu, çekilebilir duş başlığı ile',
-        category: 'kitchen'
-    },
-    {
-        id: 'k2',
-        name: 'Endüstriyel Mutfak Musluğu',
-        price: 299.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0c?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Profesyonel mutfaklar için yüksek basınçlı musluk',
-        category: 'kitchen'
-    },
-    {
-        id: 'k3',
-        name: 'Köşe Mutfak Musluğu',
-        price: 249.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0d?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Köşe lavabolar için özel tasarlanmış musluk',
-        category: 'kitchen'
-    },
-
-    // Banyo Muslukları
-    {
-        id: 'b1',
-        name: 'Klasik Banyo Musluğu',
-        price: 149.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Seramik diskli vanalara sahip geleneksel çift kollu banyo musluğu',
-        category: 'bathroom'
-    },
-    {
-        id: 'b2',
-        name: 'Modern Banyo Musluğu',
-        price: 179.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Tek kollu, LED aydınlatmalı modern banyo musluğu',
-        category: 'bathroom'
-    },
-    {
-        id: 'b3',
-        name: 'Termostatik Banyo Musluğu',
-        price: 299.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Sabit sıcaklık kontrolü sağlayan termostatik musluk',
-        category: 'bathroom'
-    },
-
-    // Duş Sistemleri
-    {
-        id: 'd1',
-        name: 'Duvara Monte Duş Sistemi',
-        price: 299.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Yağmur duş başlığı ve el duşu içeren tam duş sistemi',
-        category: 'shower'
-    },
-    {
-        id: 'd2',
-        name: 'Tavan Duş Sistemi',
-        price: 399.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0g?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Tavandan monte edilen lüks yağmur duş sistemi',
-        category: 'shower'
-    },
-    {
-        id: 'd3',
-        name: 'Hidromasaj Duş Sistemi',
-        price: 599.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0h?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Hidromasaj özellikli, çoklu duş başlıklı sistem',
-        category: 'shower'
-    },
-
-    // Aksesuarlar
-    {
-        id: 'a1',
-        name: 'Musluk Filtresi',
-        price: 49.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0i?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Su kalitesini artıran aktif karbon filtre',
-        category: 'accessories'
-    },
-    {
-        id: 'a2',
-        name: 'Duş Askısı',
-        price: 29.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0j?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Paslanmaz çelik duş askısı seti',
-        category: 'accessories'
-    },
-    {
-        id: 'a3',
-        name: 'Musluk Başlığı',
-        price: 19.99,
-        image: 'https://images.unsplash.com/photo-1584622781860-6d1a0d0c9c0k?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        description: 'Su tasarrufu sağlayan özel musluk başlığı',
-        category: 'accessories'
-    }
-];
+let isAdmin: boolean = false;
+let products: Product[] = [];
 
 // DOM Elements
 const mainContent = document.getElementById('main-content');
@@ -176,7 +85,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyC9o8-lBqkwYC_y9DJYMV-7Is69ySmOP34",
     authDomain: "yasam-website.firebaseapp.com",
     projectId: "yasam-website",
-    storageBucket: "yasam-website.appspot.com",
+    storageBucket: "yasam-website.firebasestorage.app",
     messagingSenderId: "1083117657137",
     appId: "1:1083117657137:web:bd12bacd24b4c080278910",
     measurementId: "G-HZY4507C27"
@@ -186,6 +95,23 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 const db = getFirestore(app);
+const functions = getFunctions(app);
+const storage = getStorage(app);
+
+// Production-ready admin checking using Firebase custom claims
+function checkAdminStatus() {
+    if (!currentUser) return false;
+    
+    // Check if user is admin using Firebase custom claims
+    auth.currentUser?.getIdTokenResult().then((idTokenResult: any) => {
+        isAdmin = idTokenResult.claims.admin === true;
+        renderUserInterface();
+    }).catch((error: any) => {
+        console.error('Error getting admin status:', error);
+        isAdmin = false;
+        renderUserInterface();
+    });
+}
 
 // Add Firebase Google Sign-In
 function signInWithGoogle() {
@@ -201,8 +127,26 @@ function signInWithGoogle() {
             updateUserInterface();
         })
         .catch((error) => {
-            showNotification("Giriş başarısız: " + error.message);
+            console.error("Error signing in with Google:", error);
         });
+}
+
+// Function to make a user admin
+async function makeUserAdmin(email: string) {
+    if (!isAdmin) {
+        showNotification('Admin yetkiniz bulunmamaktadır!');
+        return;
+    }
+
+    try {
+        const addAdminRole = httpsCallable(functions, 'addAdminRole');
+        const result = await addAdminRole({ email });
+        showNotification(`Başarılı! ${email} artık admin.`);
+        console.log(result.data);
+    } catch (error: any) {
+        console.error('Error making user admin:', error);
+        showNotification(`Hata: ${error.message}`);
+    }
 }
 
 function logout() {
@@ -230,12 +174,22 @@ onAuthStateChanged(auth, (user: FirebaseUser | null) => {
 // Update User Interface
 function updateUserInterface() {
     if (currentUser) {
+        // Check admin status using the new function
+        checkAdminStatus();
+    } else {
+        renderUserInterface();
+    }
+}
+
+function renderUserInterface() {
+    if (currentUser) {
         loginButton?.classList.add('hidden');
         userInfo!.innerHTML = `
             <div class="user-profile-clean">
                 <img src="${currentUser.picture}" alt="${currentUser.name}" class="user-avatar-top" id="profile-avatar" title="${currentUser.name}">
                 <div class="profile-dropdown" id="profile-dropdown">
                   <a href="/profile" class="profile-dropdown-item" id="profile-menu-profilim">Profilim</a>
+                  ${isAdmin ? '<a href="/admin" class="profile-dropdown-item" id="profile-menu-admin">Admin Paneli</a>' : ''}
                   <button id="profile-menu-logout" class="profile-dropdown-item">Çıkış Yap</button>
                 </div>
             </div>
@@ -267,12 +221,22 @@ function updateUserInterface() {
         }
         // Dropdown menu actions
         const profilimLink = document.getElementById('profile-menu-profilim');
+        const adminLink = document.getElementById('profile-menu-admin');
         const logoutBtn = document.getElementById('profile-menu-logout');
         if (profilimLink) {
             profilimLink.addEventListener('click', (e) => {
                 e.preventDefault();
                 window.history.pushState({}, '', '/profile');
                 navigateTo('/profile');
+                const profileDropdown = document.getElementById('profile-dropdown');
+                if (profileDropdown) profileDropdown.style.display = 'none';
+            });
+        }
+        if (adminLink) {
+            adminLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/admin');
+                navigateTo('/admin');
                 const profileDropdown = document.getElementById('profile-dropdown');
                 if (profileDropdown) profileDropdown.style.display = 'none';
             });
@@ -368,13 +332,13 @@ function renderProducts(category?: string) {
             <h2>${categoryTitle}</h2>
             <div class="products-grid">
                 ${filteredProducts.length === 0 ? `<p>Bu kategoride ürün bulunamadı. (category: ${category})</p>` : filteredProducts.map(product => `
-                    <div class="product-card">
+                    <div class="product-card" onclick="showProductDetail('${product.id}')" style="cursor: pointer;">
                         <div class="product-image" style="background-image: url('${product.image}')"></div>
                         <div class="product-details">
                             <h3>${product.name}</h3>
                             <p>${product.description}</p>
                             <span class="price">₺${product.price.toFixed(2)}</span>
-                            <button onclick="window.addToCartById && window.addToCartById('${product.id}')" class="add-to-cart-btn">Sepete Ekle</button>
+                            <button onclick="event.stopPropagation(); window.addToCartById && window.addToCartById('${product.id}')" class="add-to-cart-btn">Sepete Ekle</button>
                         </div>
                     </div>
                 `).join('')}
@@ -387,9 +351,9 @@ function renderProducts(category?: string) {
 // Helper function to get category name in Turkish
 function getCategoryName(category: string): string {
     const categories: { [key: string]: string } = {
-        'kitchen': 'Mutfak Muslukları',
-        'bathroom': 'Banyo Muslukları',
-        'shower': 'Duş Sistemleri',
+        'kitchen': 'Evye Bataryası',
+        'bathroom': 'Banyo Bataryası',
+        'shower': 'Duş Sistemi',
         'accessories': 'Aksesuarlar'
     };
     return categories[category] || category;
@@ -905,14 +869,13 @@ async function handleProfileSave(event: Event) {
 const categoryMap: { [key: string]: string } = {
     'Evye Bataryası': 'kitchen',
     'Banyo Bataryası': 'bathroom',
-    'Lavabo Bataryası': 'bathroom',
     'Duş Sistemi': 'shower',
-    'Musluk Başlığı': 'accessories',
+    'Aksesuarlar': 'accessories',
+    // For hrefs
     'kitchen': 'kitchen',
     'bathroom': 'bathroom',
-    'lavabo': 'bathroom',
     'shower': 'shower',
-    'accessories': 'accessories',
+    'accessories': 'accessories'
 };
 
 // --- SPA Router ---
@@ -921,11 +884,11 @@ const routes: { [key: string]: () => void } = {
     '/products': () => renderProducts(),
     '/products/kitchen': () => renderProducts('kitchen'),
     '/products/bathroom': () => renderProducts('bathroom'),
-    '/products/lavabo': () => renderProducts('bathroom'),
     '/products/shower': () => renderProducts('shower'),
     '/products/accessories': () => renderProducts('accessories'),
     '/cart': () => renderCart(),
     '/profile': () => showProfile(),
+    '/admin': () => showAdminPanel(),
 };
 
 function showHomeSections() {
@@ -1004,6 +967,8 @@ function updateBreadcrumb(path: string) {
         html += `<a href="${path}">Sepetim</a>`;
     } else if (path === '/profile') {
         html += `<a href="${path}">Profilim</a>`;
+    } else if (path === '/admin') {
+        html += `<a href="${path}">Admin Paneli</a>`;
     }
     bc.innerHTML = html;
 }
@@ -1225,6 +1190,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (product) addToCart(product);
 };
 (window as any).renderCart = renderCart;
+(window as any).showProductDetail = showProductDetail;
+(window as any).closeModal = closeModal;
+(window as any).showAdminPanel = showAdminPanel;
+(window as any).showAddProductForm = showAddProductForm;
+(window as any).showAdminManagement = showAdminManagement;
+(window as any).editProduct = editProduct;
+(window as any).deleteProduct = deleteProduct;
+(window as any).makeUserAdmin = makeUserAdmin;
+(window as any).handleRemoveAdmin = handleRemoveAdmin;
+(window as any).filterProducts = filterProducts;
+(window as any).toggleProductStatus = toggleProductStatus;
 
 // --- Carousel Functionality ---
 let currentSlideIndex = 0;
@@ -1384,4 +1360,809 @@ window.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
     const route = routes[path] || showHomeSections;
     route();
-}); 
+});
+
+// --- Product Detail Functionality ---
+function showProductDetail(productId: string) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'product-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal()"></div>
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="product-detail">
+                <div class="product-detail-image">
+                    <img src="${product.image}" alt="${product.name}">
+                </div>
+                <div class="product-detail-info">
+                    <h2>${product.name}</h2>
+                    <p class="product-price">₺${product.price.toFixed(2)}</p>
+                    <p class="product-description">${product.description}</p>
+                    ${product.detailedDescription ? `<div class="product-detailed-description">
+                        <h3>Detaylı Açıklama</h3>
+                        <p>${product.detailedDescription}</p>
+                    </div>` : ''}
+                    ${product.specifications ? `<div class="product-specifications">
+                        <h3>Teknik Özellikler</h3>
+                        <ul>
+                            ${product.specifications.material ? `<li><strong>Malzeme:</strong> ${product.specifications.material}</li>` : ''}
+                            ${product.specifications.finish ? `<li><strong>Kaplama:</strong> ${product.specifications.finish}</li>` : ''}
+                            ${product.specifications.dimensions ? `<li><strong>Boyutlar:</strong> ${product.specifications.dimensions}</li>` : ''}
+                            ${product.specifications.warranty ? `<li><strong>Garanti:</strong> ${product.specifications.warranty}</li>` : ''}
+                        </ul>
+                        ${product.specifications.features ? `<div class="product-features">
+                            <h4>Özellikler:</h4>
+                            <ul>
+                                ${product.specifications.features.map(feature => `<li>${feature}</li>`).join('')}
+                            </ul>
+                        </div>` : ''}
+                    </div>` : ''}
+                    <div class="product-actions">
+                        <button onclick="addToCartById('${product.id}'); closeModal();" class="add-to-cart-btn">Sepete Ekle</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function closeModal() {
+    const modal = document.querySelector('.product-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// --- Admin Panel Functionality ---
+function showAdminPanel() {
+    if (!isAdmin) {
+        showNotification('Admin yetkiniz bulunmamaktadır!');
+        return;
+    }
+
+    hideHomeSections();
+    if (!mainContent) return;
+    mainContent.style.display = '';
+    
+    mainContent.innerHTML = `
+        <div class="admin-panel">
+            <h2>Admin Paneli</h2>
+            <div class="admin-actions">
+                <button onclick="showAddProductForm()" class="admin-btn">Yeni Ürün Ekle</button>
+                <button onclick="showProductManagement()" class="admin-btn">Ürün Yönetimi</button>
+                <button onclick="showAdminManagement()" class="admin-btn">Admin Yönetimi</button>
+            </div>
+            <div id="admin-content">
+                <div class="admin-stats">
+                    <h3>Genel İstatistikler</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h4>Toplam Ürün</h4>
+                            <p>${products.length}</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Aktif Ürün</h4>
+                            <p>${products.filter(p => p.isActive).length}</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Toplam Stok</h4>
+                            <p>${products.reduce((sum, p) => sum + (p.stock || 0), 0)}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function showAddProductForm() {
+    const adminContent = document.getElementById('admin-content');
+    if (!adminContent) return;
+
+    adminContent.innerHTML = `
+        <div class="admin-form">
+            <h3>➕ Yeni Ürün Ekle</h3>
+            <p class="form-help">Tüm alanları doldurun ve ürün resmini yükleyin. İsteğe bağlı alanları boş bırakabilirsiniz.</p>
+            
+            <form id="add-product-form">
+                <div class="form-section">
+                    <h4>📋 Temel Bilgiler</h4>
+                    
+                    <div class="form-group">
+                        <label>Ürün Adı *:</label>
+                        <input type="text" name="name" required placeholder="Örn: Modern Mutfak Bataryası">
+                        <small>Müşterilerin göreceği ürün adı</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fiyat (₺) *:</label>
+                        <input type="number" name="price" step="0.01" required placeholder="0.00">
+                        <small>Ürünün satış fiyatı</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Kategori *:</label>
+                        <select name="category" required>
+                            <option value="">Kategori seçin</option>
+                            <option value="kitchen">🏠 Evye Bataryası</option>
+                            <option value="bathroom">🚿 Banyo Bataryası</option>
+                            <option value="shower">🚿 Duş Sistemi</option>
+                            <option value="accessories">🔧 Aksesuarlar</option>
+                        </select>
+                        <small>Ürünün hangi kategoride görüneceği</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Stok Miktarı:</label>
+                        <input type="number" name="stock" value="0" min="0" placeholder="0">
+                        <small>Mevcut stok adedi (0 = stok yok)</small>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h4>🖼️ Ürün Resmi</h4>
+                    
+                    <div class="form-group">
+                        <label>Ürün Resmi *:</label>
+                        <input type="file" name="imageFile" accept="image/*" required>
+                        <small>PNG, JPG veya JPEG formatında, tercihen 800x600 piksel</small>
+                        <div class="image-preview" id="image-preview">
+                            <div class="preview-placeholder">
+                                <span>📷</span>
+                                <p>Resim seçildiğinde burada görünecek</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h4>📝 Açıklamalar</h4>
+                    
+                    <div class="form-group">
+                        <label>Kısa Açıklama *:</label>
+                        <textarea name="description" required placeholder="Ürünün kısa tanımı (müşterilerin ilk göreceği açıklama)"></textarea>
+                        <small>Maksimum 200 karakter önerilir</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Detaylı Açıklama:</label>
+                        <textarea name="detailedDescription" placeholder="Ürünün detaylı özellikleri ve kullanım bilgileri"></textarea>
+                        <small>İsteğe bağlı - ürün detay sayfasında görünür</small>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h4>🔧 Teknik Özellikler (İsteğe Bağlı)</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Malzeme:</label>
+                            <input type="text" name="material" placeholder="Örn: Pirinç, Paslanmaz Çelik">
+                        </div>
+                        <div class="form-group">
+                            <label>Kaplama:</label>
+                            <input type="text" name="finish" placeholder="Örn: Krom, Altın">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Boyutlar:</label>
+                            <input type="text" name="dimensions" placeholder="Örn: 15x8x25 cm">
+                        </div>
+                        <div class="form-group">
+                            <label>Garanti:</label>
+                            <input type="text" name="warranty" placeholder="Örn: 2 Yıl">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Özellikler:</label>
+                        <input type="text" name="features" placeholder="Özellik 1, Özellik 2, Özellik 3">
+                        <small>Virgülle ayırarak birden fazla özellik ekleyebilirsiniz</small>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="admin-btn primary">✅ Ürünü Kaydet</button>
+                    <button type="button" onclick="showAdminPanel()" class="admin-btn secondary">❌ İptal</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    const form = document.getElementById('add-product-form') as HTMLFormElement;
+    form.addEventListener('submit', handleAddProduct);
+
+    // Enhanced image preview
+    const imageInput = form.querySelector('input[name="imageFile"]');
+    const imagePreview = form.querySelector('#image-preview');
+    imageInput?.addEventListener('change', (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (file && imagePreview) {
+            // File size validation
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                showNotification('Resim dosyası çok büyük! Maksimum 5MB olmalıdır.');
+                (event.target as HTMLInputElement).value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.innerHTML = `
+                    <div class="preview-image">
+                        <img src="${e.target?.result}" alt="Seçilen Resim Önizlemesi">
+                        <div class="file-info">
+                            <span>${file.name}</span>
+                            <span>${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                    </div>
+                `;
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Character counter for description
+    const descriptionInput = form.querySelector('textarea[name="description"]');
+    descriptionInput?.addEventListener('input', (event) => {
+        const target = event.target as HTMLTextAreaElement;
+        const maxLength = 200;
+        const currentLength = target.value.length;
+        
+        if (currentLength > maxLength) {
+            target.value = target.value.substring(0, maxLength);
+        }
+        
+        const counter = target.parentElement?.querySelector('.char-counter');
+        if (counter) {
+            counter.textContent = `${currentLength}/${maxLength}`;
+        }
+    });
+}
+
+async function handleAddProduct(event: Event) {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    const imageFile = (form.elements.namedItem('imageFile') as HTMLInputElement).files?.[0];
+
+    if (!imageFile) {
+        showNotification('Lütfen bir ürün resmi seçin.');
+        return;
+    }
+    
+    const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Ekleniyor...';
+
+    try {
+        const imageUrl = await uploadProductImage(imageFile);
+        const formData = new FormData(form);
+        
+        const newProductData = {
+            name: formData.get('name') as string,
+            price: parseFloat(formData.get('price') as string),
+            image: imageUrl,
+            description: formData.get('description') as string,
+            category: formData.get('category') as string,
+            detailedDescription: formData.get('detailedDescription') as string || undefined,
+            stock: parseInt(formData.get('stock') as string) || 0,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            specifications: {
+                material: formData.get('material') as string || undefined,
+                finish: formData.get('finish') as string || undefined,
+                dimensions: formData.get('dimensions') as string || undefined,
+                warranty: formData.get('warranty') as string || undefined,
+                features: formData.get('features') as string ? (formData.get('features') as string).split(',').map(f => f.trim()) : undefined
+            }
+        };
+
+        await addDoc(collection(db, 'products'), newProductData);
+
+        showNotification('Ürün başarıyla eklendi!');
+        await loadProducts(); 
+        showProductManagement(); 
+    } catch (error) {
+        console.error("Error adding product:", error);
+        showNotification('Ürün eklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Ürün Ekle';
+    }
+}
+
+function showProductManagement() {
+    const adminContent = document.getElementById('admin-content');
+    if (!adminContent) return;
+
+    adminContent.innerHTML = `
+        <div class="product-management">
+            <div class="management-header">
+                <h3>📦 Ürün Yönetimi</h3>
+                <div class="management-actions">
+                    <button onclick="showAddProductForm()" class="admin-btn primary">➕ Yeni Ürün Ekle</button>
+                    <div class="search-box">
+                        <input type="text" id="product-search" placeholder="🔍 Ürün ara..." onkeyup="filterProducts()">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="products-summary">
+                <div class="summary-card">
+                    <span class="summary-number">${products.length}</span>
+                    <span class="summary-label">Toplam Ürün</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-number">${products.filter(p => p.isActive).length}</span>
+                    <span class="summary-label">Aktif Ürün</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-number">${products.filter(p => (p.stock || 0) > 0).length}</span>
+                    <span class="summary-label">Stokta Olan</span>
+                </div>
+            </div>
+
+            <div class="products-table-container">
+                <table class="products-table">
+                    <thead>
+                        <tr>
+                            <th>🖼️ Resim</th>
+                            <th>📝 Ad</th>
+                            <th>🏷️ Kategori</th>
+                            <th>💰 Fiyat</th>
+                            <th>📦 Stok</th>
+                            <th>📊 Durum</th>
+                            <th>⚙️ İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products-table-body">
+                        ${products.map(product => `
+                            <tr class="product-row" data-name="${product.name.toLowerCase()}" data-category="${product.category}">
+                                <td>
+                                    <div class="product-image-cell">
+                                        <img src="${product.image}" alt="${product.name}" class="product-thumb" 
+                                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMCAyMEg0MFY0MEgyMFYyMFoiIGZpbGw9IiNEN0Q3RDciLz4KPHBhdGggZD0iTTI1IDI1SDM1VjM1SDI1VjI1WiIgZmlsbD0iI0E5QTlBOSIvPgo8L3N2Zz4K'">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="product-name-cell">
+                                        <strong>${product.name}</strong>
+                                        <small>${product.description.substring(0, 50)}${product.description.length > 50 ? '...' : ''}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="category-badge category-${product.category}">
+                                        ${getCategoryName(product.category)}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="price-display">₺${product.price.toFixed(2)}</span>
+                                </td>
+                                <td>
+                                    <span class="stock-display ${(product.stock || 0) > 0 ? 'in-stock' : 'out-of-stock'}">
+                                        ${product.stock || 0}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="status-badge ${product.isActive ? 'active' : 'inactive'}">
+                                        ${product.isActive ? '✅ Aktif' : '❌ Pasif'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button onclick="editProduct('${product.id}')" class="admin-btn small" title="Düzenle">
+                                            ✏️
+                                        </button>
+                                        <button onclick="toggleProductStatus('${product.id}')" class="admin-btn small ${product.isActive ? 'warning' : 'success'}" title="${product.isActive ? 'Pasif Yap' : 'Aktif Yap'}">
+                                            ${product.isActive ? '⏸️' : '▶️'}
+                                        </button>
+                                        <button onclick="deleteProduct('${product.id}')" class="admin-btn small danger" title="Sil">
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                
+                ${products.length === 0 ? `
+                    <div class="empty-state">
+                        <div class="empty-icon">📦</div>
+                        <h4>Henüz ürün eklenmemiş</h4>
+                        <p>İlk ürününüzü eklemek için "Yeni Ürün Ekle" butonuna tıklayın.</p>
+                        <button onclick="showAddProductForm()" class="admin-btn primary">➕ İlk Ürünü Ekle</button>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Add these helper functions
+function filterProducts() {
+    const searchTerm = (document.getElementById('product-search') as HTMLInputElement).value.toLowerCase();
+    const rows = document.querySelectorAll('.product-row');
+    
+    rows.forEach(row => {
+        const name = row.getAttribute('data-name') || '';
+        const category = row.getAttribute('data-category') || '';
+        
+        if (name.includes(searchTerm) || category.includes(searchTerm)) {
+            (row as HTMLElement).style.display = '';
+        } else {
+            (row as HTMLElement).style.display = 'none';
+        }
+    });
+}
+
+async function toggleProductStatus(productId: string) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    try {
+        const productRef = doc(db, "products", productId);
+        await updateDoc(productRef, {
+            isActive: !product.isActive,
+            updatedAt: new Date().toISOString()
+        });
+        
+        showNotification(`Ürün ${product.isActive ? 'pasif' : 'aktif'} yapıldı!`);
+        await loadProducts();
+        showProductManagement();
+    } catch (error) {
+        console.error("Error toggling product status:", error);
+        showNotification('Durum değiştirilirken bir hata oluştu.');
+    }
+}
+
+function editProduct(productId: string) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const adminContent = document.getElementById('admin-content');
+    if (!adminContent) return;
+
+    adminContent.innerHTML = `
+        <div class="admin-form">
+            <h3>Ürün Düzenle: ${product.name}</h3>
+            <form id="edit-product-form">
+                <input type="hidden" name="id" value="${product.id}">
+                <div class="form-group">
+                    <label>Ürün Adı:</label>
+                    <input type="text" name="name" value="${product.name}" required>
+                </div>
+                <div class="form-group">
+                    <label>Fiyat (₺):</label>
+                    <input type="number" name="price" step="0.01" value="${product.price}" required>
+                </div>
+                <div class="form-group">
+                    <label>Kategori:</label>
+                    <select name="category" required>
+                        <option value="kitchen" ${product.category === 'kitchen' ? 'selected' : ''}>Evye Bataryası</option>
+                        <option value="bathroom" ${product.category === 'bathroom' ? 'selected' : ''}>Banyo Bataryası</option>
+                        <option value="shower" ${product.category === 'shower' ? 'selected' : ''}>Duş Sistemi</option>
+                        <option value="accessories" ${product.category === 'accessories' ? 'selected' : ''}>Aksesuarlar</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Ürün Resmi (değiştirmek için yeni resim seçin):</label>
+                    <input type="file" name="imageFile" accept="image/*">
+                    <div class="image-preview" id="image-preview">
+                        <img src="${product.image}" alt="Mevcut Resim">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Kısa Açıklama:</label>
+                    <textarea name="description" required>${product.description}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Detaylı Açıklama:</label>
+                    <textarea name="detailedDescription">${product.detailedDescription || ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Stok Miktarı:</label>
+                    <input type="number" name="stock" value="${product.stock || 0}">
+                </div>
+                <div class="form-group">
+                    <label>Durum:</label>
+                    <select name="isActive">
+                        <option value="true" ${product.isActive ? 'selected' : ''}>Aktif</option>
+                        <option value="false" ${!product.isActive ? 'selected' : ''}>Pasif</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Malzeme:</label>
+                    <input type="text" name="material" value="${product.specifications?.material || ''}">
+                </div>
+                <div class="form-group">
+                    <label>Kaplama:</label>
+                    <input type="text" name="finish" value="${product.specifications?.finish || ''}">
+                </div>
+                <div class="form-group">
+                    <label>Boyutlar:</label>
+                    <input type="text" name="dimensions" value="${product.specifications?.dimensions || ''}">
+                </div>
+                <div class="form-group">
+                    <label>Garanti:</label>
+                    <input type="text" name="warranty" value="${product.specifications?.warranty || ''}">
+                </div>
+                <div class="form-group">
+                    <label>Özellikler (virgülle ayırın):</label>
+                    <input type="text" name="features" value="${product.specifications?.features?.join(', ') || ''}">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="admin-btn">Güncelle</button>
+                    <button type="button" onclick="showProductManagement()" class="admin-btn secondary">İptal</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    const form = document.getElementById('edit-product-form') as HTMLFormElement;
+    form.addEventListener('submit', handleEditProduct);
+    
+    const imageInput = form.querySelector('input[name="imageFile"]');
+    const imagePreview = form.querySelector('#image-preview');
+    imageInput?.addEventListener('change', (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (file && imagePreview) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.innerHTML = `<img src="${e.target?.result}" alt="Yeni Resim Önizlemesi">`;
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+}
+
+async function handleEditProduct(event: Event) {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const productId = formData.get('id') as string;
+    if (!productId) {
+        console.error("No product ID found in edit form");
+        showNotification("Hata: Ürün kimliği bulunamadı.");
+        return;
+    }
+    const imageFile = (form.elements.namedItem('imageFile') as HTMLInputElement).files?.[0];
+
+    const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Güncelleniyor...';
+
+    try {
+        const productRef = doc(db, "products", productId);
+        const originalProduct = products.find(p => p.id === productId);
+        if (!originalProduct) throw new Error("Product not found in local cache");
+
+        let imageUrl = originalProduct.image; 
+        if (imageFile) {
+            imageUrl = await uploadProductImage(imageFile); 
+        }
+
+        const updatedProductData = {
+            name: formData.get('name') as string,
+            price: parseFloat(formData.get('price') as string),
+            image: imageUrl,
+            description: formData.get('description') as string,
+            category: formData.get('category') as string,
+            detailedDescription: formData.get('detailedDescription') as string || undefined,
+            stock: parseInt(formData.get('stock') as string) || 0,
+            isActive: formData.get('isActive') === 'true',
+            updatedAt: new Date().toISOString(),
+            specifications: {
+                material: formData.get('material') as string || undefined,
+                finish: formData.get('finish') as string || undefined,
+                dimensions: formData.get('dimensions') as string || undefined,
+                warranty: formData.get('warranty') as string || undefined,
+                features: formData.get('features') as string ? (formData.get('features') as string).split(',').map(f => f.trim()) : undefined
+            }
+        };
+        
+        await updateDoc(productRef, updatedProductData);
+        
+        showNotification('Ürün başarıyla güncellendi!');
+        await loadProducts();
+        showProductManagement();
+    } catch (error) {
+        console.error("Error updating product:", error);
+        showNotification('Ürün güncellenirken bir hata oluştu.');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Güncelle';
+    }
+}
+
+async function deleteProduct(productId: string) {
+    if (!confirm('Bu ürünü silmek istediğinizden emin misiniz?')) return;
+    
+    try {
+        await deleteDoc(doc(db, "products", productId));
+        showNotification('Ürün başarıyla silindi!');
+        await loadProducts();
+        showProductManagement();
+    } catch (error) {
+        console.error("Error deleting product:", error);
+        showNotification("Ürün silinirken bir hata oluştu.");
+    }
+}
+
+async function showAdminManagement() {
+    const adminContent = document.getElementById('admin-content');
+    if (!adminContent) return;
+
+    adminContent.innerHTML = `
+        <div class="admin-form">
+            <h3>Admin Yönetimi</h3>
+            <p>Yeni admin eklemek için kullanıcının email adresini girin:</p>
+            <form id="add-admin-form">
+                <div class="form-group">
+                    <label>Email Adresi:</label>
+                    <input type="email" name="email" required placeholder="user@example.com">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="admin-btn">Admin Yap</button>
+                    <button type="button" onclick="showAdminPanel()" class="admin-btn secondary">Geri Dön</button>
+                </div>
+            </form>
+            
+            <div class="admin-list-container">
+                <h4>Mevcut Adminler</h4>
+                <div id="admin-list-loading">Yükleniyor...</div>
+                <ul id="admin-list" class="admin-list">
+                    <!-- Admin list will be populated here -->
+                </ul>
+            </div>
+        </div>
+    `;
+
+    const form = document.getElementById('add-admin-form') as HTMLFormElement;
+    form.addEventListener('submit', handleAddAdmin);
+
+    // Load and display the list of admins
+    try {
+        const listAdmins = httpsCallable(functions, 'listAdmins');
+        const result: any = await listAdmins();
+        const adminEmails = result.data.emails || [];
+        
+        const adminListEl = document.getElementById('admin-list');
+        const loadingEl = document.getElementById('admin-list-loading');
+
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (adminListEl) {
+            if (adminEmails.length === 0) {
+                adminListEl.innerHTML = '<li>Mevcut admin bulunmamaktadır.</li>';
+            } else {
+                adminListEl.innerHTML = adminEmails.map((email: string) => `
+                    <li>
+                        <span>${email}</span>
+                        ${email !== currentUser?.email ? `<button class="admin-btn small danger" onclick="handleRemoveAdmin('${email}')">Kaldır</button>` : '(Siz)'}
+                    </li>
+                `).join('');
+            }
+        }
+    } catch (error: any) {
+        console.error('Error fetching admin list:', error);
+        showNotification(`Hata: ${error.message}`);
+        const loadingEl = document.getElementById('admin-list-loading');
+        if (loadingEl) loadingEl.textContent = 'Admin listesi yüklenemedi.';
+    }
+}
+
+async function handleRemoveAdmin(email: string) {
+    if (!confirm(`${email} kullanıcısının admin yetkisini kaldırmak istediğinizden emin misiniz?`)) {
+        return;
+    }
+
+    try {
+        const removeAdminRole = httpsCallable(functions, 'removeAdminRole');
+        await removeAdminRole({ email });
+        showNotification(`${email} artık admin değil.`);
+        showAdminManagement(); // Refresh the list
+    } catch (error: any) {
+        console.error('Error removing admin:', error);
+        showNotification(`Hata: ${error.message}`);
+    }
+}
+
+function handleAddAdmin(event: Event) {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const email = formData.get('email') as string;
+    
+    makeUserAdmin(email);
+    form.reset();
+}
+
+// Make functions available globally
+(window as any).showProductDetail = showProductDetail;
+(window as any).showAdminPanel = showAdminPanel;
+(window as any).showAddProductForm = showAddProductForm;
+(window as any).handleAddProduct = handleAddProduct;
+(window as any).showProductManagement = showProductManagement;
+(window as any).editProduct = editProduct;
+(window as any).deleteProduct = deleteProduct;
+(window as any).makeUserAdmin = makeUserAdmin;
+(window as any).handleRemoveAdmin = handleRemoveAdmin;
+(window as any).filterProducts = filterProducts;
+(window as any).toggleProductStatus = toggleProductStatus;
+
+async function uploadProductImage(file: File): Promise<string> {
+    const filePath = `products/${Date.now()}-${file.name}`;
+    const storageRef = ref(storage, filePath);
+
+    showNotification('Resim yükleniyor, lütfen bekleyin...');
+    
+    try {
+        const uploadTask = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(uploadTask.ref);
+        showNotification('Resim başarıyla yüklendi!');
+        return downloadURL;
+    } catch (error) {
+        console.error("Error uploading image: ", error);
+        showNotification('Resim yüklenirken bir hata oluştu.');
+        throw error;
+    }
+}
+
+async function loadProducts() {
+    try {
+        const productsCollection = collection(db, "products");
+        const q = query(productsCollection, orderBy("name"));
+        const productsSnapshot = await getDocs(q);
+        products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+        console.log('Products loaded from Firestore:', products.length);
+    } catch (error) {
+        console.error("Error loading products from Firestore:", error);
+        showNotification("Ürünler yüklenirken bir hata oluştu.");
+        products = [];
+    }
+}
+
+// Main App Initialization
+async function initializeAppAndRender() {
+    console.log("Initializing app...");
+    await loadProducts();
+
+    // Consolidate all startup logic here
+    initRouter();
+    initCarousel();
+    setupSmoothScroll();
+    setupCartIconHandler();
+    setupStaticAddToCartButtons();
+
+    // Initial route handling based on current URL
+    const path = window.location.pathname;
+    const route = routes[path] || showHomeSections;
+    route();
+    
+    console.log("App Initialized.");
+}
+
+document.addEventListener('DOMContentLoaded', initializeAppAndRender);
+
+// Make functions globally available
+(window as any).deleteProduct = deleteProduct;
+(window as any).editProduct = editProduct;
+(window as any).changeSlide = changeSlide;
+(window as any).currentSlide = currentSlide;
+(window as any).addToCartById = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (product) {
+        addToCart(product);
+    } else {
+        console.error('Product not found for ID:', productId);
+        showNotification('Ürün bulunamadı.');
+    }
+};
